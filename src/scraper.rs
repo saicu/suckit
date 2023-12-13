@@ -1,7 +1,6 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::Path;
 use std::sync::Mutex;
 use std::time;
 
@@ -9,7 +8,6 @@ use crossbeam::channel::{Receiver, Sender, TryRecvError};
 use crossbeam::thread;
 use encoding_rs::Encoding;
 use lazy_static::lazy_static;
-use pathdiff;
 use rand::Rng;
 use regex::Regex;
 use url::Url;
@@ -90,13 +88,9 @@ impl Scraper {
     }
 
     /// Fix the URLs contained in the DOM-tree so they point to each other relatively
-    fn fix_domtree(&self, dom_url: &mut String, source_path: &str, dest_path: &str) {
-        let source_path_parent = Path::new(source_path).parent().unwrap().to_str().unwrap(); //Unwrap should be safe, there will alway be at least .../index.html
-        let diff_path = pathdiff::diff_paths(dest_path, source_path_parent).unwrap();
-        let relative_path = diff_path.as_path().to_str().unwrap();
-
+    fn fix_domtree(&self, dom_url: &mut String, dest_path: &str) {
         dom_url.clear();
-        dom_url.push_str(relative_path);
+        dom_url.push_str(dest_path);
     }
 
     /// Find the charset of the webpage. ``data`` is not a String as this might not be utf8.
@@ -177,10 +171,6 @@ impl Scraper {
         };
 
         let dom = dom::Dom::new(&String::from_utf8_lossy(&utf8_data));
-        let source_path = match scraper.path_map.lock().unwrap().get(url.as_str()) {
-            Some(path) => path.clone(),
-            None => error!("Url {} was not found in the path map", url.as_str()),
-        };
 
         dom.find_urls_as_strings()
             .into_iter()
@@ -195,6 +185,7 @@ impl Scraper {
 
                 next_full_url.set_fragment(None);
                 let path = url_helper::to_path(&next_full_url);
+                let next_full_url_str = next_full_url.to_string();
 
                 if scraper.map_url_path(&next_full_url, path.clone()) {
                     if !Scraper::is_on_another_domain(next_url, url) {
@@ -212,7 +203,7 @@ impl Scraper {
                     }
                 }
 
-                scraper.fix_domtree(next_url, &source_path, &path);
+                scraper.fix_domtree(next_url, &next_full_url_str);
             });
 
         let utf8_data = dom.serialize().into_bytes();

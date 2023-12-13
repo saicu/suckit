@@ -20,17 +20,20 @@ pub fn to_path(url: &Url) -> String {
     let mut filename = path.file_name().map_or(String::from(""), |filename| {
         filename.to_str().unwrap().to_string()
     });
+
     let mut parent = path
         .parent()
         .map_or("", |filename| filename.to_str().unwrap())
         .to_string();
 
+    let mut has_no_extension = false;
     if url_path_and_query.ends_with('/') {
         filename = "index.html".to_string();
         parent = url_path_and_query.trim_end_matches('/').to_string();
     } else if Path::new(&filename).extension().is_none() {
         parent = url_path_and_query.trim_end_matches('/').to_string();
-        filename = "index_no_slash.html".to_string();
+        filename = ".html".to_owned();
+        has_no_extension = true
     }
 
     if filename.len() > FILE_NAME_MAX_LENGTH {
@@ -38,7 +41,11 @@ pub fn to_path(url: &Url) -> String {
         filename = format!("{:x}.html", digest);
     }
 
-    format!("{}{}/{}", url_domain, parent, filename)
+    if has_no_extension {
+        format!("{}{}{}", url_domain, parent, filename)
+    } else {
+        format!("{}{}/{}", url_domain, parent, filename)
+    }
 }
 
 #[cfg(test)]
@@ -77,7 +84,7 @@ mod tests {
     fn url_to_path_index_no_slash() {
         let str = super::to_path(&Url::parse("https://lwn.net/Kernel").unwrap());
 
-        assert_eq!(str, "lwn.net/Kernel/index_no_slash.html");
+        assert_eq!(str, "lwn.net/Kernel.html");
     }
 
     #[test]
